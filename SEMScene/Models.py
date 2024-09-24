@@ -1,7 +1,7 @@
 # Include Pred Visual Features (optional)
 import math
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence, pad_sequence
-from Metrics import *
+from .Metrics import *
 
 
 # An ordinary implementation of Swish function
@@ -436,10 +436,10 @@ class WordEmbedding(nn.Module):
         self.init_weight = init_weight
         self.model = nn.Embedding(num_embeddings=self.numb_words, embedding_dim=self.embed_dim, sparse=sparse)
         if self.init_weight is not None:
-            print('Initilised with given init_weight')
+            print('[SEMScene] Initilised with given init_weight')
             self.model.weight.data.copy_(init_weight);
         else:
-            print('Randomly Initilised')
+            print('[SEMScene] Randomly Initilised')
 
     def forward(self, x):
         return self.model(x)

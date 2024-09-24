@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from Metrics import xattn_score_t2i, xattn_score_i2t
+from .Metrics import xattn_score_t2i, xattn_score_i2t
 
 
 def shard_xattn_t2i(images, obj_nums, captions, caplens, shard_size=128):

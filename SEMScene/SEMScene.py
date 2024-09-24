@@ -1,88 +1,20 @@
 import os
-from tqdm.auto import tqdm
-from Data_Utils import *
-import Models as md
-from Metrics import *
-from Retrieval_Utils import *
-from torch.nn.utils.rnn import pad_sequence
-import torch.optim as optim
-from torch.nn.utils.clip_grad import clip_grad_norm_ as clip_grad_norm
 import time
+
+from torch.nn.utils.rnn import pad_sequence
+import torch.optim
+from torch.nn.utils.clip_grad import clip_grad_norm_ as clip_grad_norm
+from tqdm.auto import tqdm
 from tensorboardX import SummaryWriter
 from torch.backends import cudnn
 
+from .Data_Utils import *
+from . import Models as md
+from .Metrics import *
+from .Retrieval_Utils import *
+
 cudnn.enabled = True
 cudnn.benchmark = True
-
-if info_dict['Datasets'].lower() == 'flickr30k':
-    DATA_DIR = '../data_flickr30k/data'
-
-    word2idx_cap = joblib.load(f"{DATA_DIR}/flickr30k_lowered_caps_word2idx_train_val.joblib")
-    word2idx_img_obj = joblib.load(f"{DATA_DIR}/flickr30k_lowered_img_obj_word2idx.joblib")
-    word2idx_img_pred = joblib.load(f"{DATA_DIR}/flickr30k_lowered_img_pred_word2idx.joblib")
-
-    TOTAL_CAP_WORDS = len(word2idx_cap)
-    TOTAL_IMG_OBJ = len(word2idx_img_obj)
-    TOTAL_IMG_PRED = len(word2idx_img_pred)
-
-    subset = 'train'
-    images_data_train = joblib.load(f"{DATA_DIR}/flickr30k_{subset}_lowered_images_data_adj.joblib")
-    caps_data_train = joblib.load(f"{DATA_DIR}/flickr30k_{subset}_lowered_caps_data_adj.joblib")
-    img_cap_matching_idx_train = joblib.load(f"{DATA_DIR}/image_caption_matching_flickr_{subset}.joblib")
-    cap_img_matching_idx_train = joblib.load(f"{DATA_DIR}/caption_image_matching_flickr_{subset}.joblib")
-
-    subset = 'val'
-    images_data_val = joblib.load(f"{DATA_DIR}/flickr30k_{subset}_lowered_images_data_adj.joblib")
-    caps_data_val = joblib.load(f"{DATA_DIR}/flickr30k_{subset}_lowered_caps_data_adj.joblib")
-    img_cap_matching_idx_val = joblib.load(f"{DATA_DIR}/image_caption_matching_flickr_{subset}.joblib")
-    cap_img_matching_idx_val = joblib.load(f"{DATA_DIR}/caption_image_matching_flickr_{subset}.joblib")
-
-    init_embed_model_weight_cap = joblib.load(f'{DATA_DIR}/init_glove_embedding_weight_lowered_train_val.joblib')
-    init_embed_model_weight_cap = torch.FloatTensor(init_embed_model_weight_cap)
-    init_embed_model_weight_img_obj = joblib.load(f'{DATA_DIR}/init_glove_embedding_weight_lowered_img_obj.joblib')
-    init_embed_model_weight_img_obj = torch.FloatTensor(init_embed_model_weight_img_obj)
-    init_embed_model_weight_img_pred = joblib.load(f'{DATA_DIR}/init_glove_embedding_weight_lowered_img_pred.joblib')
-    init_embed_model_weight_img_pred = torch.FloatTensor(init_embed_model_weight_img_pred)
-
-elif info_dict['Datasets'].lower() == 'ms-coco':
-    DATA_DIR = '../data_mscoco/data'
-    subset = 'train'
-    images_data_train = joblib.load(f"{DATA_DIR}/mscoco_{subset}2014_images_data_adj.joblib")
-    caps_data_train = joblib.load(f"{DATA_DIR}/mscoco_{subset}2014_caps_data_stem_adj.joblib")
-    img_cap_matching_idx_train = joblib.load(f"{DATA_DIR}/image_caption_matching_mscoco_{subset}2014.joblib")
-    cap_img_matching_idx_train = joblib.load(f"{DATA_DIR}/caption_image_matching_mscoco_{subset}2014.joblib")
-
-    subset = 'val'
-    images_data_val = joblib.load(f"{DATA_DIR}/mscoco_{subset}2014_images_data_adj.joblib")
-    caps_data_val = joblib.load(f"{DATA_DIR}/mscoco_{subset}2014_caps_data_stem_adj.joblib")
-    img_cap_matching_idx_val = joblib.load(f"{DATA_DIR}/image_caption_matching_mscoco_{subset}2014.joblib")
-    cap_img_matching_idx_val = joblib.load(f"{DATA_DIR}/caption_image_matching_mscoco_{subset}2014.joblib")
-
-    word2idx_cap_sent = joblib.load(f"{DATA_DIR}/mscoco_sgraf_caps_word2idx.joblib")
-    word2idx_cap = joblib.load(f"{DATA_DIR}/mscoco_original_sgm_caps_word2idx.joblib")
-    word2idx_img_obj = joblib.load(f"{DATA_DIR}/mscoco_img_obj_word2idx.joblib")
-    word2idx_img_pred = joblib.load(f"{DATA_DIR}/mscoco_img_pred_word2idx.joblib")
-
-    TOTAL_SENT_WORDS = len(word2idx_cap_sent)
-    TOTAL_CAP_WORDS = len(word2idx_cap)
-    TOTAL_IMG_OBJ = len(word2idx_img_obj)
-    TOTAL_IMG_PRED = len(word2idx_img_pred)
-    print(f'total sent words:{TOTAL_SENT_WORDS}')
-    print(f'total cap words:{TOTAL_CAP_WORDS}')
-    print(f'Total images objects: {TOTAL_IMG_OBJ}')
-    print(f'Total images predicates: {TOTAL_IMG_PRED}')
-
-    init_embed_model_weight_cap = joblib.load(
-        f'{DATA_DIR}/mscoco_init_glove_embedding_weight_original_sgm_caps_word2idx.joblib')
-    init_embed_model_weight_cap = torch.FloatTensor(init_embed_model_weight_cap)
-    init_embed_model_weight_img_obj = joblib.load(
-        f'{DATA_DIR}/mscoco_init_glove_embedding_weight_img_obj_word2idx.joblib')
-    init_embed_model_weight_img_obj = torch.FloatTensor(init_embed_model_weight_img_obj)
-    init_embed_model_weight_img_pred = joblib.load(
-        f'{DATA_DIR}/mscoco_init_glove_embedding_weight_img_pred_word2idx.joblib')
-    init_embed_model_weight_img_pred = torch.FloatTensor(init_embed_model_weight_img_pred)
-else:
-    raise ValueError("Incorrect Dataset Name!")
 
 
 def print_dict(di):
@@ -94,10 +26,12 @@ def print_dict(di):
 
 
 class Trainer():
-    def __init__(self):
+
+    def __init__(self, data_dir='./data_flickr30k/data', verbose=True):
         super(Trainer, self).__init__()
 
         self.info_dict = info_dict
+        self.verbose = verbose
         self.numb_sample = info_dict['numb_sample']
         self.numb_epoch = info_dict['numb_epoch']
         self.unit_dim = 300
@@ -131,15 +65,17 @@ class Trainer():
         self.include_pred_ft = info_dict['include_pred_ft']
         self.device = device
         self.n_heads = info_dict['n_heads']
+
         # Build datasets for training
-        self.datatrain = PairGraphPrecomputeDataset(image_sgg=images_data_train,
-                                                    caption_sgg=caps_data_train,
-                                                    word2idx_cap=word2idx_cap,
-                                                    word2idx_img_obj=word2idx_img_obj,
-                                                    word2idx_img_pred=word2idx_img_pred,
+        self.load_metadata(data_dir)
+        self.datatrain = PairGraphPrecomputeDataset(image_sgg=self.images_data_train,
+                                                    caption_sgg=self.caps_data_train,
+                                                    word2idx_cap=self.word2idx_cap,
+                                                    word2idx_img_obj=self.word2idx_img_obj,
+                                                    word2idx_img_pred=self.word2idx_img_pred,
                                                     effnet=self.visual_backbone,
-                                                    image_caption_matching=img_cap_matching_idx_train,
-                                                    caption_image_matching=cap_img_matching_idx_train,
+                                                    image_caption_matching=self.img_cap_matching_idx_train,
+                                                    caption_image_matching=self.cap_img_matching_idx_train,
                                                     numb_sample=self.numb_sample)
 
         # Declare models
@@ -151,14 +87,14 @@ class Trainer():
                                                 visualft_structure=self.visual_backbone,
                                                 visualft_feature_dim=self.visual_ft_dim,
                                                 fusion_output_dim=self.gcn_input_dim,
-                                                numb_total_obj=TOTAL_IMG_OBJ, numb_total_pred=TOTAL_IMG_PRED,
-                                                init_weight_obj=init_embed_model_weight_img_obj,
-                                                init_weight_pred=init_embed_model_weight_img_pred,
+                                                numb_total_obj=self.TOTAL_IMG_OBJ, numb_total_pred=self.TOTAL_IMG_PRED,
+                                                init_weight_obj=self.init_embed_model_weight_img_obj,
+                                                init_weight_pred=self.init_embed_model_weight_img_pred,
                                                 include_pred_ft=self.include_pred_ft,
                                                 network_structure=info_dict['model_name'].lower())
 
-        self.embed_model_cap = md.WordEmbedding(numb_words=TOTAL_CAP_WORDS, embed_dim=self.unit_dim,
-                                                init_weight=init_embed_model_weight_cap, sparse=False)
+        self.embed_model_cap = md.WordEmbedding(numb_words=self.TOTAL_CAP_WORDS, embed_dim=self.unit_dim,
+                                                init_weight=self.init_embed_model_weight_cap, sparse=False)
 
         self.sent_model = md.SentenceModel(input_dim=self.unit_dim, hidden_dim=self.gcn_output_dim,
                                            numb_layers=self.rnn_numb_layers,
@@ -232,17 +168,100 @@ class Trainer():
             self.params += list(filter(lambda p: p.requires_grad, self.gpo_cap.parameters()))
 
         if self.optimizer_choice.lower() == 'adam':
-            self.optimizer = optim.Adam(self.params,
-                                        lr=self.learning_rate,
-                                        betas=(0.9, 0.999),
-                                        eps=1e-08,
-                                        weight_decay=self.weight_decay)
+            self.optimizer = torch.optim.Adam(self.params,
+                                              lr=self.learning_rate,
+                                              betas=(0.9, 0.999),
+                                              eps=1e-08,
+                                              weight_decay=self.weight_decay)
 
         if self.optimizer_choice.lower() == 'adamw':
-            self.optimizer = optim.AdamW(self.params,
-                                         lr=self.learning_rate,
-                                         betas=(0.9, 0.999),
-                                         weight_decay=self.weight_decay)
+            self.optimizer = torch.optim.AdamW(self.params,
+                                               lr=self.learning_rate,
+                                               betas=(0.9, 0.999),
+                                               weight_decay=self.weight_decay)
+
+    def load_metadata(self, data_dir):
+        if self.verbose:
+            print("[SEMScene] Loading metadata...")
+
+        if self.info_dict['Datasets'].lower() == 'flickr30k':
+            # data_dir = './data_flickr30k/data'
+
+            self.word2idx_cap = joblib.load(f"{data_dir}/flickr30k_lowered_caps_word2idx_train_val.joblib")
+            self.word2idx_img_obj = joblib.load(f"{data_dir}/flickr30k_lowered_img_obj_word2idx.joblib")
+            self.word2idx_img_pred = joblib.load(f"{data_dir}/flickr30k_lowered_img_pred_word2idx.joblib")
+
+            self.TOTAL_CAP_WORDS = len(self.word2idx_cap)
+            self.TOTAL_IMG_OBJ = len(self.word2idx_img_obj)
+            self.TOTAL_IMG_PRED = len(self.word2idx_img_pred)
+            if self.verbose:
+                print(f"[SEMScene] There are {self.TOTAL_CAP_WORDS} words, "
+                      f"{self.TOTAL_IMG_OBJ} total objects and {self.TOTAL_IMG_PRED} total predicates in Flickr30K")
+                print("[SEMScene] Loading captions and scene graphs...")
+
+            subset = 'train'
+            self.images_data_train = joblib.load(f"{data_dir}/flickr30k_{subset}_lowered_images_data_adj.joblib")
+            self.caps_data_train = joblib.load(f"{data_dir}/flickr30k_{subset}_lowered_caps_data_adj.joblib")
+            self.img_cap_matching_idx_train = joblib.load(f"{data_dir}/image_caption_matching_flickr_{subset}.joblib")
+            self.cap_img_matching_idx_train = joblib.load(f"{data_dir}/caption_image_matching_flickr_{subset}.joblib")
+
+            subset = 'val'
+            self.images_data_val = joblib.load(f"{data_dir}/flickr30k_{subset}_lowered_images_data_adj.joblib")
+            self.caps_data_val = joblib.load(f"{data_dir}/flickr30k_{subset}_lowered_caps_data_adj.joblib")
+            self.img_cap_matching_idx_val = joblib.load(f"{data_dir}/image_caption_matching_flickr_{subset}.joblib")
+            self.cap_img_matching_idx_val = joblib.load(f"{data_dir}/caption_image_matching_flickr_{subset}.joblib")
+
+            if self.verbose:
+                print("[SEMScene] Loading glove embeddings...")
+            self.init_embed_model_weight_cap = joblib.load(f'{data_dir}/init_glove_embedding_weight_lowered_train_val.joblib')
+            self.init_embed_model_weight_cap = torch.FloatTensor(self.init_embed_model_weight_cap)
+            self.init_embed_model_weight_img_obj = joblib.load(f'{data_dir}/init_glove_embedding_weight_lowered_img_obj.joblib')
+            self.init_embed_model_weight_img_obj = torch.FloatTensor(self.init_embed_model_weight_img_obj)
+            self.init_embed_model_weight_img_pred = joblib.load(f'{data_dir}/init_glove_embedding_weight_lowered_img_pred.joblib')
+            self.init_embed_model_weight_img_pred = torch.FloatTensor(self.init_embed_model_weight_img_pred)
+
+        elif self.info_dict['Datasets'].lower() == 'ms-coco':
+            # data_dir = './data_mscoco/data'
+            subset = 'train'
+            self.images_data_train = joblib.load(f"{data_dir}/mscoco_{subset}2014_images_data_adj.joblib")
+            self.caps_data_train = joblib.load(f"{data_dir}/mscoco_{subset}2014_caps_data_stem_adj.joblib")
+            self.img_cap_matching_idx_train = joblib.load(f"{data_dir}/image_caption_matching_mscoco_{subset}2014.joblib")
+            self.cap_img_matching_idx_train = joblib.load(f"{data_dir}/caption_image_matching_mscoco_{subset}2014.joblib")
+
+            subset = 'val'
+            self.images_data_val = joblib.load(f"{data_dir}/mscoco_{subset}2014_images_data_adj.joblib")
+            self.caps_data_val = joblib.load(f"{data_dir}/mscoco_{subset}2014_caps_data_stem_adj.joblib")
+            self.img_cap_matching_idx_val = joblib.load(f"{data_dir}/image_caption_matching_mscoco_{subset}2014.joblib")
+            self.cap_img_matching_idx_val = joblib.load(f"{data_dir}/caption_image_matching_mscoco_{subset}2014.joblib")
+
+            self.word2idx_cap_sent = joblib.load(f"{data_dir}/mscoco_sgraf_caps_word2idx.joblib")
+            self.word2idx_cap = joblib.load(f"{data_dir}/mscoco_original_sgm_caps_word2idx.joblib")
+            self.word2idx_img_obj = joblib.load(f"{data_dir}/mscoco_img_obj_word2idx.joblib")
+            self.word2idx_img_pred = joblib.load(f"{data_dir}/mscoco_img_pred_word2idx.joblib")
+
+            self.TOTAL_SENT_WORDS = len(self.word2idx_cap_sent)
+            self.TOTAL_CAP_WORDS = len(self.word2idx_cap)
+            self.TOTAL_IMG_OBJ = len(self.word2idx_img_obj)
+            self.TOTAL_IMG_PRED = len(self.word2idx_img_pred)
+            if self.verbose:
+                print(f'[SEMScene] total sent words:{self.TOTAL_SENT_WORDS}')
+                print(f'[SEMScene] total cap words:{self.TOTAL_CAP_WORDS}')
+                print(f'[SEMScene] Total images objects: {self.TOTAL_IMG_OBJ}')
+                print(f'[SEMScene] Total images predicates: {self.TOTAL_IMG_PRED}')
+
+            if self.verbose:
+                print("[SEMScene] Loading glove embeddings...")
+            self.init_embed_model_weight_cap = joblib.load(
+                f'{data_dir}/mscoco_init_glove_embedding_weight_original_sgm_caps_word2idx.joblib')
+            self.init_embed_model_weight_cap = torch.FloatTensor(self.init_embed_model_weight_cap)
+            self.init_embed_model_weight_img_obj = joblib.load(
+                f'{data_dir}/mscoco_init_glove_embedding_weight_img_obj_word2idx.joblib')
+            self.init_embed_model_weight_img_obj = torch.FloatTensor(self.init_embed_model_weight_img_obj)
+            self.init_embed_model_weight_img_pred = joblib.load(
+                f'{data_dir}/mscoco_init_glove_embedding_weight_img_pred_word2idx.joblib')
+            self.init_embed_model_weight_img_pred = torch.FloatTensor(self.init_embed_model_weight_img_pred)
+        else:
+            raise ValueError("Incorrect Dataset Name!")
 
     def adjust_learning_rate(self):
         lr = self.learning_rate * self.lr_decay_factor
@@ -263,10 +282,11 @@ class Trainer():
         model_info_log.close()
 
     # ---------- LOAD TRAINED MODEL ---------
-    def load_trained_model(self):
-        if self.checkpoint is not None:
-            print(f"LOAD PRETRAINED MODEL AT {self.checkpoint}")
-            modelCheckpoint = torch.load(self.checkpoint)
+    def load_trained_model(self, checkpoint=None):
+        if self.checkpoint is not None or checkpoint is not None:
+            sel_checkpoint = self.checkpoint if self.checkpoint is not None else checkpoint
+            print(f"[SEMScene] Loaded pre-trained model at {sel_checkpoint}")
+            modelCheckpoint = torch.load(sel_checkpoint, weights_only=True)
             self.embed_model_cap.load_state_dict(modelCheckpoint['embed_model_cap_state_dict'])
             self.sent_model.load_state_dict(modelCheckpoint['sent_model_state_dict'])
             self.image_branch_model.load_state_dict(modelCheckpoint['image_branch_model_state_dict'])
@@ -285,7 +305,7 @@ class Trainer():
                 self.gpo_cap.load_state_dict(modelCheckpoint['gpo_cap_state_dict'])
             self.optimizer.load_state_dict(modelCheckpoint['optimizer_state_dict'])
         else:
-            print("Training from scratch")
+            print("[SEMScene] Training from scratch")
 
     # ---------- RUN TRAIN ---------
     def train(self):
@@ -313,7 +333,7 @@ class Trainer():
         else:
             lr_adjust_epoch_id = {15, 25}
         for epochID in range(self.numb_epoch):
-            print(f"Training {epochID + 1}/{self.numb_epoch}")
+            print(f"[SEMScene] Training {epochID + 1}/{self.numb_epoch}")
 
             if epochID + 1 in lr_adjust_epoch_id:
                 self.adjust_learning_rate()
@@ -321,8 +341,8 @@ class Trainer():
             lossTrain = self.train_epoch(loss_matrix, loss_contra, writer, epochID + 1)
 
             with torch.no_grad():
-                print('Validating..')
-                lossVal, ar_val, ari_val = self.validate_retrieval(images_data_val, caps_data_val)
+                print('[SEMScene] Validating..')
+                lossVal, ar_val, ari_val = self.validate_retrieval(self.images_data_val, self.caps_data_val)
 
             lossVal = 6 - lossVal
             timestampTime = time.strftime("%H%M%S")
@@ -395,17 +415,17 @@ class Trainer():
             writer.add_scalar('Learning Rate', current_lr, epochID + 1)
 
             if count_change_loss >= 15:
-                print(f'Early stopping: {count_change_loss} epoch not decrease the loss')
+                print(f'[SEMScene] Early stopping: {count_change_loss} epoch not decrease the loss')
                 break
 
         writer.close()
 
     # ---------- TRAINING 1 EPOCH ---------
     def train_epoch(self, loss_matrix, loss_contra, writer, epochID):
-        print(f"Shuffling Training Dataset")
+        print(f"[SEMScene] Shuffling Training Dataset")
         self.datatrain.create_pairs(seed=1509 + epochID + 100)
         dataloadertrain = make_PairGraphPrecomputeDataLoader(self.datatrain, batch_size=self.batch_size, num_workers=0)
-        print(f"Done Shuffling")
+        print(f"[SEMScene] Done Shuffling")
 
         self.embed_model_cap.train()
         self.image_branch_model.train()
@@ -427,7 +447,7 @@ class Trainer():
         loss_report = 0
         count = 0
         numb_iter = len(dataloadertrain)
-        print(f"Total iteration: {numb_iter}")
+        print(f"[SEMScene] Total iteration: {numb_iter}")
         with tqdm(dataloadertrain) as iterator:
             for batch in iterator:
                 img_p_o, img_p_o_ft, img_p_p, img_p_p_ft, img_p_e, img_p_numb_o, img_p_numb_p, \
@@ -495,7 +515,7 @@ class Trainer():
                         edge = cap_p_e[idx]  # subject, object
                         eb_cap_p_o[edge[0]] = rnn_eb_cap_p_rels_nodes[idx, 1, :]  # <start> is 1st token
                         eb_cap_p_o[edge[1]] = rnn_eb_cap_p_rels_nodes[idx, cap_p_len_p[idx] - 2,
-                                              :]  # <end> is last token
+                                                                      :]  # <end> is last token
                         eb_cap_p_p[idx] = torch.mean(rnn_eb_cap_p_rels_nodes[idx, 2:(cap_p_len_p[idx] - 2), :], dim=0)
                     # [Obj EMB]
                     eb_cap_p_o, eb_cap_p_p = self.gcn_model_cap(eb_cap_p_o, eb_cap_p_p, cap_p_e)
@@ -602,8 +622,8 @@ class Trainer():
                     for i, rels_num in enumerate(cap_p_numb_p):
                         sent_all[i][:cap_p_len_s[i], :] = rnn_eb_pad_cap_p_s[i][:cap_p_len_s[i], :]
                         sent_all[i][cap_p_len_s[i]:cap_p_len_s[i] + rels_num, :] = rnn_eb_cap_p_rels[
-                                                                                   rels_offset: rels_offset + rels_num,
-                                                                                   :]
+                            rels_offset: rels_offset + rels_num,
+                            :]
                         rels_offset += rels_num
                     sent_all_len = cap_p_len_s
                     for i in range(len(sent_all_len)):
@@ -633,8 +653,8 @@ class Trainer():
         return loss_report / count
 
     def encode_image_sgg(self, image_sgg, batch_size=16):
-        i_dts = ImagePrecomputeDataset(image_sgg=image_sgg, word2idx_obj=word2idx_img_obj,
-                                       word2idx_pred=word2idx_img_pred, effnet=self.visual_backbone, numb_sample=None)
+        i_dts = ImagePrecomputeDataset(image_sgg=image_sgg, word2idx_obj=self.word2idx_img_obj,
+                                       word2idx_pred=self.word2idx_img_pred, effnet=self.visual_backbone, numb_sample=None)
         i_dtld = make_ImagePrecomputeDataLoader(i_dts, batch_size=batch_size, num_workers=0)
 
         eb_img_o_all = []
@@ -651,7 +671,7 @@ class Trainer():
         if info_dict['model_name'].lower() == 'triplet':
             self.graph_embed_model.eval()
         with torch.no_grad():
-            print('Embedding objects and predicates of images ...')
+            print('[SEMScene] Embedding objects and predicates of images ...')
             for batchID, batch in enumerate(i_dtld):
                 img_o, img_o_ft, img_p, img_p_ft, img_e, img_numb_o, img_numb_p, img_mask, image_id = batch
                 img_o_ft = img_o_ft.to(device)
@@ -690,8 +710,103 @@ class Trainer():
         return (img_obj_emb, img_pred_emb, img_numb_o_all, img_numb_p_all, img_numb_p_all_xx, img_id_all,
                 img_o_all, img_p_all, img_glo_all, img_mask_all)
 
+    def encode_caption_sgg_batch(self, batch):
+        cap_o, cap_p, cap_e, cap_s, cap_numb_o, cap_numb_p, cap_len_p, cap_len_s, cap_mask, cap_id = batch
+
+        eb_cap_rels_all = []
+        eb_cap_sent_all = []
+        cap_numb_rels_all = []
+        cap_len_sent_all = []
+        cap_mask_all = []
+        cap_id_all = []
+        eb_cap_o_all = []
+        eb_cap_numb_o_all = []
+        eb_cap_p_all = []
+        eb_cap_numb_p_all = []
+        cap_obj_all = []
+
+        self.embed_model_cap.eval()
+        self.sent_model.eval()
+        self.rels_model.eval()
+        if info_dict['model_name'].lower() == 'triplet':
+            self.gcn_model_cap.eval()
+            self.graph_embed_model.eval()
+
+        with torch.no_grad():
+            print('[SEMScene] Embedding captions data_flickr30k ...')
+            cap_id_all += cap_id
+            eb_cap_numb_o_all.append(cap_numb_o)
+            eb_cap_numb_p_all.append(cap_numb_p)
+            pad_cap_s_concate = pad_sequence(cap_s, batch_first=True).to(device)  # padding Sentence
+            pad_cap_p_concate = pad_sequence(cap_p, batch_first=True).to(device)  # padding Rels
+
+            # Embedding network (object, predicates in image and caption)
+            # [Caption] Embed Sentence
+            eb_pad_cap_s_concate = self.embed_model_cap(pad_cap_s_concate)
+            eb_pad_cap_p_concate = self.embed_model_cap(pad_cap_p_concate)
+
+            # [Caption] Sentence Model
+            rnn_eb_pad_cap_s_concate = self.sent_model(eb_pad_cap_s_concate, cap_len_s)
+            for idx_sent in range(len(cap_len_s)):
+                eb_cap_sent_all.append(rnn_eb_pad_cap_s_concate[idx_sent, 0:cap_len_s[idx_sent], :].data.cpu())
+
+            rnn_eb_cap_rels, rnn_eb_cap_rels_nodes = self.rels_model(eb_pad_cap_p_concate, cap_len_p)
+
+            pred_offset = 0
+            for idx_cap in range(len(cap_numb_p)):
+                eb_cap_rels_all.append(
+                    rnn_eb_cap_rels[pred_offset: (pred_offset + cap_numb_p[idx_cap]), :].data.cpu())
+                pred_offset += cap_numb_p[idx_cap]
+
+            cap_numb_rels_all += cap_numb_p
+            cap_len_sent_all += cap_len_s
+
+            if info_dict['model_name'].lower() == 'triplet':
+                # [CAPTION] GCN
+                total_cap_numb_o = sum(cap_numb_o)
+                total_cap_numb_p = sum(cap_numb_p)
+                eb_cap_o = torch.zeros(total_cap_numb_o, self.gcn_output_dim).to(device)
+                eb_cap_p = torch.zeros(total_cap_numb_p, self.gcn_output_dim).to(device)
+                for idx in range(len(rnn_eb_cap_rels_nodes)):
+                    edge = cap_e[idx]  # subject, object
+                    eb_cap_o[edge[0]] = rnn_eb_cap_rels_nodes[idx, 1, :]  # <start> is 1st token
+                    eb_cap_o[edge[1]] = rnn_eb_cap_rels_nodes[idx, cap_len_p[idx] - 2, :]  # <end> is last token
+                    eb_cap_p[idx] = torch.mean(rnn_eb_cap_rels_nodes[idx, 2:(cap_len_p[idx] - 2), :], dim=0)
+
+                eb_cap_o, eb_cap_p = self.gcn_model_cap(eb_cap_o, eb_cap_p, cap_e)
+                eb_cap_o_all.append(eb_cap_o)
+                caption_geb = self.graph_embed_model(eb_cap_o, eb_cap_p, cap_numb_o, cap_numb_p)  # n_cap, dim
+                cap_obj_all.append(caption_geb)
+
+                eb_cap_p_all.append(eb_cap_p)
+                cap_mask_all.append(cap_mask)
+
+            if info_dict['model_name'].lower() == 'graph':
+                cap_sent_emb = pad_sequence(eb_cap_sent_all, batch_first=True)
+                cap_rels_emb = pad_sequence(eb_cap_rels_all, batch_first=True)
+            else:
+                cap_sent_emb = pad_sequence(eb_cap_sent_all, batch_first=True).data.cpu().numpy()
+                cap_rels_emb = pad_sequence(eb_cap_rels_all, batch_first=True).data.cpu().numpy()
+
+        return (cap_sent_emb, cap_rels_emb, cap_len_sent_all, cap_numb_rels_all, cap_id_all, eb_cap_o_all,
+                eb_cap_numb_o_all, eb_cap_p_all, eb_cap_numb_p_all, cap_obj_all, cap_mask_all)
+
+    def encode_single_caption_sgg(self, caption_dataset, caption_idx):
+
+        self.embed_model_cap.eval()
+        self.sent_model.eval()
+        self.rels_model.eval()
+        if info_dict['model_name'].lower() == 'triplet':
+            self.gcn_model_cap.eval()
+            self.graph_embed_model.eval()
+
+        caption = caption_dataset[caption_idx]
+        with torch.no_grad():
+            batched_caption = caption_collate_fn([caption])
+            return self.encode_caption_sgg_batch(batched_caption)
+
     def encode_caption_sgg(self, caption_sgg, batch_size=1):
-        c_dts = CaptionDataset(caption_sgg=caption_sgg, word2idx=word2idx_cap, numb_sample=None)
+        c_dts = CaptionDataset(caption_sgg=caption_sgg, word2idx=self.word2idx_cap, numb_sample=None)
         c_dtld = make_CaptionDataLoader(c_dts, batch_size=batch_size, num_workers=0)
 
         eb_cap_rels_all = []
@@ -714,7 +829,7 @@ class Trainer():
             self.graph_embed_model.eval()
 
         with torch.no_grad():
-            print('Embedding captions data_flickr30k ...')
+            print('[SEMScene] Embedding captions data_flickr30k ...')
             for batchID, batch in enumerate(c_dtld):
                 cap_o, cap_p, cap_e, cap_s, cap_numb_o, cap_numb_p, cap_len_p, cap_len_s, cap_mask, cap_id = batch
                 cap_id_all += cap_id
@@ -784,7 +899,7 @@ class Trainer():
          eb_cap_p_all, eb_cap_numb_p_all, cap_obj_all, cap_mask_all) = self.encode_caption_sgg(caption_sgg,
                                                                                                batch_size=64)
 
-        print(f'{len(img_id_all)} images', ' ', f'{len(cap_id_all)} texts')
+        print(f'[SEMScene] {len(img_id_all)} images', ' ', f'{len(cap_id_all)} texts')
 
         if info_dict['model_name'].lower() == 'triplet':
             self.cross_obj.eval()
@@ -794,7 +909,7 @@ class Trainer():
             self.cross_pred.eval()
             self.transformer_pred.eval()
 
-            print('Obj EMB...')
+            print('[SEMScene] Obj EMB...')
             img_obj = self.cross_obj(torch.cat(img_obj_all, dim=0))
             img_obj = self.transformer_obj(input_Q=img_obj.reshape(len(img_id_all), 1, -1),
                                            input_K=torch.cat(img_o_all, dim=0).reshape(len(img_id_all), 36, -1),
@@ -819,7 +934,7 @@ class Trainer():
                                            input_K=eb_gcn_cap_p_o,
                                            input_V=eb_gcn_cap_p_o)
 
-            print(len(img_id_all), len(cap_id_all))
+            print('[SEMScene] ', len(img_id_all), len(cap_id_all))
             max_num = 0
             cap_mask_len = 0
             for cap in cap_mask_all:
@@ -833,7 +948,7 @@ class Trainer():
                 count += cap.shape[0]
             del cap_mask_all
 
-            print('Tri EMB...')
+            print('[SEMScene] Tri EMB...')
 
             img_tri = self.semgnn_img(torch.cat(img_p_all, dim=0), torch.cat(img_numb_p_all_xx, dim=0),
                                       torch.cat(img_mask_all, dim=0).to(device))
@@ -932,20 +1047,20 @@ class Trainer():
 
 def run():
     if not os.path.exists(info_dict['save_dir']):
-        print(f"Creating {info_dict['save_dir']} folder")
+        print(f"[SEMScene] Creating {info_dict['save_dir']} folder")
         os.makedirs(info_dict['save_dir'])
 
     trainer = Trainer()
-    trainer.train()  # To make direct testing, delete this statement
+    # trainer.train()  # To make direct testing, delete this statement
 
     trainer.load_trained_model()
     subset = 'test'
     if info_dict['Datasets'].lower() == 'flickr30k':
-        DATA_DIR = '../data_flickr30k/data'
+        DATA_DIR = './data_flickr30k/data'
         images_data = joblib.load(f"{DATA_DIR}/flickr30k_{subset}_lowered_images_data_adj.joblib")
-        caps_data = joblib.load(f"{DATA_DIR}/flickr30k_{subset}_lowered_caps_data_adj (1).joblib")
+        caps_data = joblib.load(f"{DATA_DIR}/flickr30k_{subset}_lowered_caps_data_adj.joblib")
     elif info_dict['Datasets'].lower() == 'ms-coco':
-        DATA_DIR = '../data_mscoco/data'
+        DATA_DIR = './data_mscoco/data'
         images_data = joblib.load(f"{DATA_DIR}/mscoco_{subset}2014_images_data_adj.joblib")
         caps_data = joblib.load(f"{DATA_DIR}/mscoco_{subset}2014_caps_data_stem_adj.joblib")
     else:
@@ -957,5 +1072,5 @@ def run():
     info_txt = info_txt + f"\n[t2i] {round(ari_val[0], 4)} {round(ari_val[1], 4)} {round(ari_val[2], 4)}"
     print(info_txt)
 
-
-run()
+if __name__ == "__main__":
+    run()

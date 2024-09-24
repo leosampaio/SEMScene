@@ -5,7 +5,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
-from Configuration import device
+
+from .Configuration import device
 
 
 def l1norm(X, dim, eps=1e-8):

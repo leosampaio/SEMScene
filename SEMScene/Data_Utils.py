@@ -2,19 +2,19 @@ import random
 import numpy as np
 import torch
 import joblib
+
 from torch.utils.data import Dataset, DataLoader
 from nltk.tokenize import word_tokenize
-from Configuration import info_dict
+from .Configuration import info_dict
 
 if info_dict['Datasets'].lower() == 'flickr30k':
-    OBJ_FT_DIR = '../data_flickr30k/image/object'  # run extract_visual_features.py to get this
-    PRED_FT_DIR = '../data_flickr30k/image/relationship'  # run extract_visual_features.py to get this
+    OBJ_FT_DIR = './data_flickr30k/image/object'  # run extract_visual_features.py to get this
+    PRED_FT_DIR = './data_flickr30k/image/relationship'  # run extract_visual_features.py to get this
 elif info_dict['Datasets'].lower() == 'ms-coco':
-    OBJ_FT_DIR = '../data_mscoco/image/object'
-    PRED_FT_DIR = '../data_mscoco/image/relationship'
+    OBJ_FT_DIR = './data_mscoco/image/object'
+    PRED_FT_DIR = './data_mscoco/image/relationship'
 else:
     raise ValueError("Incorrect Dataset Name!")
-
 
 def indexing_sent(sent, word2idx, add_start_end=True):
     words = word_tokenize(sent)
@@ -518,3 +518,70 @@ def make_CaptionDataLoader(dataset, batch_size=4, num_workers=8, pin_memory=True
     dataloader = DataLoader(dataset, batch_size=batch_size, collate_fn=caption_collate_fn, pin_memory=pin_memory,
                             num_workers=num_workers, shuffle=shuffle)
     return dataloader
+
+def draw_scene_graph(objs, triples, vocab=None, **kwargs):
+    output_filename = kwargs.pop('output_filename', 'graph.png')
+    orientation = kwargs.pop('orientation', 'V')
+    edge_width = kwargs.pop('edge_width', 6)
+    arrow_size = kwargs.pop('arrow_size', 1.5)
+    binary_edge_weight = kwargs.pop('binary_edge_weight', 1.2)
+    ignore_dummies = kwargs.pop('ignore_dummies', True)
+
+    if orientation not in ['V', 'H']:
+        raise ValueError('Invalid orientation "%s"' % orientation)
+    rankdir = {'H': 'LR', 'V': 'TD'}[orientation]
+
+    if vocab is not None:
+        assert torch.is_tensor(objs)
+        assert torch.is_tensor(triples)
+        objs_list, triples_list = [], []
+        for i in range(objs.size(0)):
+            objs_list.append(vocab['object_idx_to_name'][objs[i].item()])
+        for i in range(triples.size(0)):
+            s = triples[i, 0].item()
+            # p = vocab['pred_name_to_idx'][triples[i, 1].item()]
+            p = triples[i, 1].item()
+            o = triples[i, 2].item()
+            triples_list.append([s, p, o])
+        objs, triples = objs_list, triples_list
+
+    lines = [
+        'digraph{',
+        'graph [size="5,3",ratio="compress",dpi="300",bgcolor="transparent"]',
+        'rankdir=%s' % rankdir,
+        'nodesep="0.5"',
+        'ranksep="0.5"',
+        'node [shape="box",style="rounded,filled",fontsize="48",color="none"]',
+        'node [fillcolor="lightpink1"]',
+    ]
+
+    for i, obj in enumerate(objs):
+        if ignore_dummies and obj == '__image__':
+            continue
+        lines.append('%d [label="%s"]' % (i, obj))
+
+    next_node_id = len(objs)
+    lines.append('node [fillcolor="lightblue1"]')
+    for s, p, o in triples:
+        p = vocab['pred_idx_to_name'][p]
+        if ignore_dummies and p == '__in_image__':
+            continue
+        lines += [
+            '%d [label="%s"]' % (next_node_id, p),
+            '%d->%d [penwidth=%f,arrowsize=%f,weight=%f]' % (
+                s, next_node_id, edge_width, arrow_size, binary_edge_weight),
+            '%d->%d [penwidth=%f,arrowsize=%f,weight=%f]' % (
+                next_node_id, o, edge_width, arrow_size, binary_edge_weight)
+        ]
+        next_node_id += 1
+    lines.append('}')
+
+    ff, dot_filename = tempfile.mkstemp()
+    with open(dot_filename, 'w') as f:
+        for line in lines:
+            f.write('%s\n' % line)
+    os.close(ff)
+
+    output_format = os.path.splitext(output_filename)[1][1:]
+    os.system('dot -T%s %s > %s' % (output_format, dot_filename, output_filename))
+    return None
