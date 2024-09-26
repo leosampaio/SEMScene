@@ -6,12 +6,13 @@ channels:
   - defaults
 dependencies:
   - python=3.11.4
-  - pytorch=2.0.1
-  - torchaudio=2.0.2
-  - torchvision=0.15.2
-  - pytorch-cuda=12.1
+  # - pytorch=2.0.1
+  # - torchaudio=2.0.2
+  # - torchvision=0.15.2
+  # - pytorch-cuda=12.1
   - transformers=4.34.0
   - pip:
+    - --find-links https://download.pytorch.org/whl/torch_stable.html
     - appdirs==1.4.4
     - atomicwrites==1.4.0
     - backports.weakref==1.0.post1
@@ -48,4 +49,10 @@ dependencies:
     - scipy==1.10.1
     - sentencepiece==0.1.99
     - tokenizers==0.14.1
-    - notebook==6.3
+    - notebook==6.5.6
+    - tensorboardX==2.6.2.2
+    - nltk==3.9.1
+    - matplotlib==3.9.2
+    - torch==2.0.1+cu118
+    - torchaudio==2.0.2+cu118
+    - torchvision==0.15.2+cu118
